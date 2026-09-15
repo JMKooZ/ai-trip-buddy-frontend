@@ -19,10 +19,15 @@ import type { TripPlace } from "@/app/types/trip";
 
 interface TripPlaceSortableListProps {
   places: TripPlace[];
-  onUpdate?: (placeId: string, field: "name" | "category" | "description", value: string) => void;
+  onUpdate?: (
+    placeId: string,
+    field: "name" | "category" | "description",
+    value: string,
+  ) => void;
   onMove?: (index: number, direction: -1 | 1) => void;
   onRemove?: (placeId: string) => void;
   onReorder: (places: TripPlace[]) => void;
+  onSelect?: (place: TripPlace) => void;
   compact?: boolean;
 }
 
@@ -33,6 +38,7 @@ function SortablePlaceItem({
   onUpdate,
   onMove,
   onRemove,
+  onSelect,
   compact,
 }: {
   place: TripPlace;
@@ -41,6 +47,7 @@ function SortablePlaceItem({
   onUpdate?: TripPlaceSortableListProps["onUpdate"];
   onMove?: TripPlaceSortableListProps["onMove"];
   onRemove?: TripPlaceSortableListProps["onRemove"];
+  onSelect?: TripPlaceSortableListProps["onSelect"];
   compact?: boolean;
 }) {
   const {
@@ -86,7 +93,14 @@ function SortablePlaceItem({
             aria-label={`${place.order}번 장소 이름`}
           />
         ) : (
-          <p className="truncate text-sm font-semibold">{place.name}</p>
+          <button
+            type="button"
+            onClick={() => onSelect?.(place)}
+            className="block w-full truncate text-left text-sm font-semibold hover:underline"
+            title="상세 보기"
+          >
+            {place.name}
+          </button>
         )}
 
         {onUpdate ? (
@@ -112,9 +126,14 @@ function SortablePlaceItem({
         )}
 
         {compact && place.description && (
-          <p className="truncate text-[11px] text-neutral-500 dark:text-neutral-400">
+          <button
+            type="button"
+            onClick={() => onSelect?.(place)}
+            className="block w-full truncate text-left text-[11px] text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
+            title={place.description}
+          >
             {place.description}
-          </p>
+          </button>
         )}
       </div>
 
@@ -164,6 +183,7 @@ export default function TripPlaceSortableList({
   onMove,
   onRemove,
   onReorder,
+  onSelect,
   compact = false,
 }: TripPlaceSortableListProps) {
   const sensors = useSensors(
@@ -212,6 +232,7 @@ export default function TripPlaceSortableList({
               onUpdate={onUpdate}
               onMove={onMove}
               onRemove={onRemove}
+              onSelect={onSelect}
               compact={compact}
             />
           ))}

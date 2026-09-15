@@ -46,6 +46,15 @@ interface DomesticMapProps {
   selectedDay?: number;
   onSelectedDayChange?: (day: number) => void;
   onPlacesChange?: (places: TripPlace[]) => void;
+  onPlaceUpdate?: (
+    placeId: string,
+    field: "name" | "category" | "description",
+    value: string,
+  ) => void;
+  onPlaceMove?: (index: number, direction: -1 | 1) => void;
+  onPlaceRemove?: (placeId: string) => void;
+  onPlaceAdd?: (name: string) => void;
+  onPlaceSelect?: (place: TripPlace) => void;
 }
 
 const NAVER_MAP_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
@@ -232,6 +241,11 @@ function DomesticMapInner({
   selectedDay = 1,
   onSelectedDayChange,
   onPlacesChange,
+  onPlaceUpdate,
+  onPlaceMove,
+  onPlaceRemove,
+  onPlaceAdd,
+  onPlaceSelect,
 }: DomesticMapProps) {
   const navermaps = useNavermaps();
   const [target, setTarget] = useState<LatLng | null>(null);
@@ -790,9 +804,44 @@ function DomesticMapInner({
                   </p>
                 </div>
 
+                <div className="mb-3 flex gap-2">
+                  <input
+                    id="map-planner-place-input"
+                    placeholder="장소 추가"
+                    className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs outline-none dark:border-neutral-700 dark:bg-neutral-900"
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      const input = event.currentTarget;
+                      const name = input.value.trim();
+                      if (!name) return;
+                      onPlaceAdd?.(name);
+                      input.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const input = document.getElementById(
+                        "map-planner-place-input",
+                      ) as HTMLInputElement | null;
+                      const name = input?.value.trim() ?? "";
+                      if (!name) return;
+                      onPlaceAdd?.(name);
+                      if (input) input.value = "";
+                    }}
+                    className="rounded-lg bg-neutral-900 px-3 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900"
+                  >
+                    추가
+                  </button>
+                </div>
+
                 <TripPlaceSortableList
                   places={plannedPlaces}
                   compact
+                  onUpdate={onPlaceUpdate}
+                  onMove={onPlaceMove}
+                  onRemove={onPlaceRemove}
+                  onSelect={onPlaceSelect}
                   onReorder={(places) => onPlacesChange?.(places)}
                 />
               </div>
