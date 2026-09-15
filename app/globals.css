@@ -23,7 +23,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   transition:
     background-color 300ms ease,
     border-color 300ms ease,

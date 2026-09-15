@@ -10,23 +10,76 @@ import {
   useNavermaps,
   useListener,
 } from "react-naver-maps";
-import RegionSearchBar from "@/app/components/map/RegionSearchBar";
-import { KOREA_DEFAULT_VIEW, CLOSEUP_ZOOM } from "@/app/lib/map/regions";
+import {
+  KOREA_DEFAULT_VIEW,
+  CLOSEUP_ZOOM,
+  DOMESTIC_PRESETS,
+} from "@/app/lib/map/regions";
 import { formatRelativeTime } from "@/app/lib/format/relativeTime";
+import type { TripPlace, TripPlan } from "@/app/types/trip";
+import TripPlaceSortableList from "@/app/components/TripPlaceSortableList";
 
 interface LatLng {
   lat: number;
   lng: number;
 }
 
-interface HistoryEntry extends LatLng {
+interface HistoryEntry {
   id: string;
+  lat: number | null;
+  lng: number | null;
   label: string;
   timestamp: number;
   source: "search" | "click";
+  naverPlaceUrl?: string;
+}
+
+interface DomesticMapProps {
+  plannedPlaces?: TripPlace[];
+  showHistory?: boolean;
+  searchRequest?: {
+    query: string;
+    id: number;
+  };
+  tripPlan?: TripPlan | null;
+  plannerMode?: "ai" | "custom";
+  selectedDay?: number;
+  onSelectedDayChange?: (day: number) => void;
+  onPlacesChange?: (places: TripPlace[]) => void;
 }
 
 const NAVER_MAP_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
+
+function PlannedRoute({ places }: { places: TripPlace[] }) {
+  const map = useMap();
+  const navermaps = useNavermaps();
+
+  useEffect(() => {
+    if (!map || !navermaps || places.length < 2) {
+      return;
+    }
+
+    const path = places.map(
+      (place) => new navermaps.LatLng(place.lat, place.lng)
+    );
+
+    const polyline = new navermaps.Polyline({
+      map,
+      path,
+      strokeColor: "#111111",
+      strokeOpacity: 0.8,
+      strokeWeight: 5,
+      strokeLineCap: "round",
+      strokeLineJoin: "round",
+    });
+
+    return () => {
+      polyline.setMap(null);
+    };
+  }, [map, navermaps, places]);
+
+  return null;
+}
 
 function MapController({
   target,
@@ -44,9 +97,6 @@ function MapController({
       return;
     }
 
-    // 이벤트가 제공하는 좌표를 그대로 사용한다.
-    // 화면상의 픽셀 좌표를 임의로 보정하지 않아
-    // 실제 클릭 지점과 마커 위치가 일치하도록 한다.
     onMapClick(coord.lat(), coord.lng());
   });
 
@@ -55,70 +105,201 @@ function MapController({
       return;
     }
 
-    const position = new window.naver.maps.LatLng(
-      target.lat,
-      target.lng
-    );
-
+    const position = new window.naver.maps.LatLng(target.lat, target.lng);
     map.setCenter(position);
     map.setZoom(CLOSEUP_ZOOM);
   }, [map, target]);
 
-  return target ? (
-    <Marker
-      key={`${target.lat}-${target.lng}`}
-      position={target}
-    />
-  ) : null;
+  return null;
 }
 
-function DomesticMapInner() {
+
+function RouteViewport({ places }: { places: TripPlace[] }) {
+  const map = useMap();
   const navermaps = useNavermaps();
 
+  useEffect(() => {
+    if (!map || !navermaps || places.length === 0) {
+      return;
+    }
+
+    if (places.length === 1) {
+      map.setCenter(
+        new navermaps.LatLng(places[0].lat, places[0].lng)
+      );
+      map.setZoom(CLOSEUP_ZOOM);
+      return;
+    }
+
+    const bounds = new navermaps.LatLngBounds(
+      new navermaps.LatLng(places[0].lat, places[0].lng),
+      new navermaps.LatLng(places[0].lat, places[0].lng)
+    );
+
+    places.forEach((place) => {
+      bounds.extend(
+        new navermaps.LatLng(place.lat, place.lng)
+      );
+    });
+
+    map.fitBounds(bounds, 80);
+  }, [map, navermaps, places]);
+
+  return null;
+}
+
+function PlannedPlaceMarkers({
+  places,
+  selectedPlaceId,
+  onSelect,
+}: {
+  places: TripPlace[];
+  selectedPlaceId: string | null;
+  onSelect: (place: TripPlace) => void;
+}) {
+  const navermaps = useNavermaps();
+
+  return (
+    <>
+      {places.map((place) => {
+        const selected = selectedPlaceId === place.id;
+        const size = selected ? 44 : 38;
+
+        const icon = {
+          content: `
+            <div style="
+              width:${size}px;
+              height:${size}px;
+              border-radius:50%;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              box-sizing:border-box;
+              background:${selected ? "#111111" : "#ffffff"};
+              color:${selected ? "#ffffff" : "#111111"};
+              border:3px solid #111111;
+              box-shadow:0 3px 10px rgba(0,0,0,0.25);
+              font-size:${selected ? 15 : 13}px;
+              font-weight:800;
+              cursor:pointer;
+              transition:all 180ms ease;
+            ">${place.order}</div>
+          `,
+          size: new navermaps.Size(size, size),
+          anchor: new navermaps.Point(size / 2, size / 2),
+        };
+
+        return (
+          <Marker
+            key={place.id}
+            position={{ lat: place.lat, lng: place.lng }}
+            icon={icon}
+            title={`${place.order}. ${place.name}`}
+            zIndex={selected ? 1000 : 100 + place.order}
+            onClick={() => onSelect(place)}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function SearchPlaceMarker({ target }: { target: LatLng | null }) {
+  const navermaps = useNavermaps();
+
+  if (!target) return null;
+
+  return (
+    <Marker
+      position={target}
+      icon={{
+        content: `<div style="width:16px;height:16px;border-radius:50%;background:#111;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.28)"></div>`,
+        size: new navermaps.Size(16, 16),
+        anchor: new navermaps.Point(8, 8),
+      }}
+      title="검색한 위치"
+      zIndex={2000}
+    />
+  );
+}
+
+function DomesticMapInner({
+  plannedPlaces = [],
+  showHistory = true,
+  searchRequest,
+  tripPlan = null,
+  plannerMode = "ai",
+  selectedDay = 1,
+  onSelectedDayChange,
+  onPlacesChange,
+}: DomesticMapProps) {
+  const navermaps = useNavermaps();
   const [target, setTarget] = useState<LatLng | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
+  const [rightPanel, setRightPanel] = useState<"history" | "place" | null>(null);
+  const [plannerPanelOpen, setPlannerPanelOpen] = useState(true);
   const [searching, setSearching] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  // 상대 시간을 1초 단위로 갱신한다.
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1_000);
+    const id = window.setInterval(() => setNow(Date.now()), 1_000);
 
-    return () => {
-      window.clearInterval(id);
-    };
+    return () => window.clearInterval(id);
   }, []);
 
-  const addHistory = (
-    entry: LatLng,
-    label: string,
-    source: HistoryEntry["source"]
-  ) => {
-    const normalizedLabel =
-      label.trim() || "알 수 없는 위치";
+  const addHistory = ({
+    lat,
+    lng,
+    label,
+    source,
+    id,
+    naverPlaceUrl,
+  }: {
+    lat: number | null;
+    lng: number | null;
+    label: string;
+    source: HistoryEntry["source"];
+    id?: string;
+    naverPlaceUrl?: string;
+  }) => {
+    const normalizedLabel = label.trim() || "알 수 없는 위치";
 
     setHistory((prev) => {
-      // 같은 장소를 빠르게 연속 클릭/검색했을 경우
-      // 중복 기록을 만들지 않는다.
+      if (id) {
+        return prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                lat,
+                lng,
+                label: normalizedLabel,
+                naverPlaceUrl: naverPlaceUrl ?? item.naverPlaceUrl,
+              }
+            : item
+        );
+      }
+
       const duplicate = prev.find(
         (item) =>
-          item.label === normalizedLabel &&
-          Math.abs(item.lat - entry.lat) < 0.00001 &&
-          Math.abs(item.lng - entry.lng) < 0.00001
+          item.lat !== null &&
+          item.lng !== null &&
+          lat !== null &&
+          lng !== null &&
+          Math.abs(item.lat - lat) < 0.00001 &&
+          Math.abs(item.lng - lng) < 0.00001
       );
 
       if (duplicate) {
-        const rest = prev.filter(
-          (item) => item.id !== duplicate.id
-        );
+        const rest = prev.filter((item) => item.id !== duplicate.id);
 
         return [
           {
             ...duplicate,
+            label: normalizedLabel,
             timestamp: Date.now(),
             source,
+            naverPlaceUrl: naverPlaceUrl ?? duplicate.naverPlaceUrl,
           },
           ...rest,
         ].slice(0, 20);
@@ -126,22 +307,69 @@ function DomesticMapInner() {
 
       return [
         {
-          ...entry,
           id: crypto.randomUUID(),
+          lat,
+          lng,
           label: normalizedLabel,
           timestamp: Date.now(),
           source,
+          naverPlaceUrl,
         },
         ...prev,
       ].slice(0, 20);
     });
   };
 
-  const handleSearch = (query: string) => {
+  useEffect(() => {
+    const query = searchRequest?.query.trim();
+
+    if (!query || !searchRequest?.id) {
+      return;
+    }
+
+    const historyId = crypto.randomUUID();
+    const naverPlaceUrl = `https://map.naver.com/p/search/${encodeURIComponent(query)}`;
+
+    // 검색 즉시 오른쪽 History drawer를 열고 기록한다.
+    setRightPanel("history");
+    setHistory((prev) => [
+      {
+        id: historyId,
+        lat: null,
+        lng: null,
+        label: query,
+        timestamp: Date.now(),
+        source: "search",
+        naverPlaceUrl,
+      },
+      ...prev,
+    ].slice(0, 20));
+
+    const preset = DOMESTIC_PRESETS.find((item) =>
+      item.name.includes(query) || query.includes(item.name)
+    );
+
+    if (preset) {
+      const presetPoint = {
+        lat: preset.lat,
+        lng: preset.lng,
+      };
+
+      setTarget(presetPoint);
+      addHistory({
+        id: historyId,
+        lat: preset.lat,
+        lng: preset.lng,
+        label: preset.name,
+        source: "search",
+        naverPlaceUrl,
+      });
+      return;
+    }
+
+
+
     if (!navermaps?.Service) {
-      window.alert(
-        "지도 서비스를 불러오는 중입니다. 잠시 후 다시 시도해주세요."
-      );
       return;
     }
 
@@ -153,18 +381,12 @@ function DomesticMapInner() {
         setSearching(false);
 
         if (status !== navermaps.Service.Status.OK) {
-          window.alert(
-            "검색 결과가 없어요. 다른 지역명이나 장소명으로 시도해보세요."
-          );
           return;
         }
 
         const result = response?.v2?.addresses?.[0];
 
         if (!result) {
-          window.alert(
-            "검색 결과를 가져오지 못했습니다. 다시 시도해주세요."
-          );
           return;
         }
 
@@ -176,45 +398,41 @@ function DomesticMapInner() {
         }
 
         const searchedLabel =
-          result.roadAddress ||
-          result.jibunAddress ||
-          query;
+          result.roadAddress || result.jibunAddress || query;
 
-        setTarget({
+        setTarget({ lat, lng });
+
+        addHistory({
+          id: historyId,
           lat,
           lng,
+          label: searchedLabel,
+          source: "search",
+          naverPlaceUrl,
         });
-
-        addHistory(
-          {
-            lat,
-            lng,
-          },
-          searchedLabel,
-          "search"
-        );
       }
     );
-  };
+  }, [navermaps, searchRequest?.id]);
 
   const handleMapClick = (lat: number, lng: number) => {
-    // 클릭 좌표 자체는 보정하지 않는다.
-    // 지도 SDK가 전달한 실제 WGS84 좌표를 사용한다.
-    const clickedPoint = {
-      lat,
-      lng,
-    };
+    const clickedPoint = { lat, lng };
+    const historyId = crypto.randomUUID();
+    const naverPlaceUrl = `https://map.naver.com/p?c=15.00,${lng},${lat},0,dh`;
 
-    // 클릭 즉시 마커와 지도를 이동시킨다.
-    // reverse geocode 결과를 기다리지 않는다.
+    setRightPanel("history");
     setTarget(clickedPoint);
 
+    // Reverse geocoding이 403이어도 클릭 기록은 즉시 표시한다.
+    addHistory({
+      id: historyId,
+      lat,
+      lng,
+      label: "지도 클릭 위치",
+      source: "click",
+      naverPlaceUrl,
+    });
+
     if (!navermaps?.Service) {
-      addHistory(
-        clickedPoint,
-        `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-        "click"
-      );
       return;
     }
 
@@ -227,17 +445,7 @@ function DomesticMapInner() {
         ].join(","),
       },
       (status: string, response: any) => {
-        // reverse geocoding이 실패하더라도
-        // 지도 클릭 자체는 이미 성공했으므로
-        // 좌표를 기준으로 기록을 남긴다.
-        if (
-          status !== navermaps.Service.Status.OK
-        ) {
-          addHistory(
-            clickedPoint,
-            `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
-            "click"
-          );
+        if (status !== navermaps.Service.Status.OK) {
           return;
         }
 
@@ -245,129 +453,362 @@ function DomesticMapInner() {
         const result = response?.v2?.results?.[0];
         const region = result?.region;
 
-        // 사람이 이해하기 쉬운 지역명을 우선한다.
-        //
-        // 예:
-        // 서울특별시 강남구 역삼동
-        // 경기도 성남시 분당구 정자동
         const area1 = region?.area1?.name;
         const area2 = region?.area2?.name;
         const area3 = region?.area3?.name;
 
-        const regionLabel = [
-          area1,
-          area2,
-          area3,
-        ]
+        const regionLabel = [area1, area2, area3]
           .filter(Boolean)
           .join(" ");
 
         const addressLabel =
-          address?.roadAddress ||
-          address?.jibunAddress;
+          address?.roadAddress || address?.jibunAddress;
 
         const label =
           regionLabel ||
           addressLabel ||
-          `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          "지도 클릭 위치";
 
-        addHistory(
-          clickedPoint,
+        addHistory({
+          id: historyId,
+          lat,
+          lng,
           label,
-          "click"
-        );
+          source: "click",
+          naverPlaceUrl,
+        });
       }
     );
   };
 
-  return (
-    <div
-      className={`grid gap-4 transition-[grid-template-columns] duration-500 ease-in-out ${
-        history.length > 0
-          ? "md:grid-cols-[1fr_280px]"
-          : "md:grid-cols-1"
-      }`}
-    >
-      <div className="flex min-w-0 flex-col gap-3">
-        <RegionSearchBar
-          placeholder="국내 지역/장소 검색"
-          onSearch={handleSearch}
-          loading={searching}
-        />
+  useEffect(() => {
+    if (plannedPlaces.length === 0) {
+      setSelectedPlace(null);
+      return;
+    }
 
-        <Container className="h-[60vh] w-full overflow-hidden rounded-xl transition-[height] duration-500 md:h-[75vh]">
-          <NaverMap
-            defaultCenter={{
-              lat: KOREA_DEFAULT_VIEW.lat,
-              lng: KOREA_DEFAULT_VIEW.lng,
-            }}
-            defaultZoom={KOREA_DEFAULT_VIEW.zoom}
-          >
-            <MapController
-              target={target}
-              onMapClick={handleMapClick}
-            />
-          </NaverMap>
-        </Container>
+    const firstPlace = plannedPlaces[0];
+
+    setSelectedPlace((current) => {
+      if (!current) {
+        return firstPlace;
+      }
+
+      return (
+        plannedPlaces.find((place) => place.id === current.id) ??
+        firstPlace
+      );
+    });
+  }, [plannedPlaces]);
+
+  const handleSelectPlace = (place: TripPlace) => {
+    setSelectedPlace(place);
+    setRightPanel("place");
+    setTarget({
+      lat: place.lat,
+      lng: place.lng,
+    });
+  };
+
+  const handleHistoryClick = (item: HistoryEntry) => {
+    if (item.lat === null || item.lng === null) {
+      return;
+    }
+
+    setTarget({
+      lat: item.lat,
+      lng: item.lng,
+    });
+  };
+
+  return (
+    <div className="relative h-full min-h-[720px] w-full">
+      <Container className="h-full min-h-[720px] w-full overflow-hidden rounded-2xl">
+        <NaverMap
+          defaultCenter={{
+            lat: KOREA_DEFAULT_VIEW.lat,
+            lng: KOREA_DEFAULT_VIEW.lng,
+          }}
+          defaultZoom={KOREA_DEFAULT_VIEW.zoom}
+        >
+          <MapController
+            target={target}
+            onMapClick={handleMapClick}
+          />
+
+          {plannedPlaces.length > 0 && (
+            <>
+              <RouteViewport places={plannedPlaces} />
+              <PlannedRoute places={plannedPlaces} />
+              <PlannedPlaceMarkers
+                places={plannedPlaces}
+                selectedPlaceId={selectedPlace?.id ?? null}
+                onSelect={handleSelectPlace}
+              />
+            </>
+          )}
+        </NaverMap>
+      </Container>
+
+      <button
+        type="button"
+        onClick={() => setRightPanel((current) => current ? null : "history")}
+        className={`absolute right-2 top-1/2 z-30 flex h-9 w-7 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-neutral-200/70 bg-white/70 text-sm font-medium text-neutral-400 shadow-sm backdrop-blur transition-all duration-300 hover:bg-white/90 hover:text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-950/70 dark:text-neutral-500 dark:hover:bg-neutral-900/90 dark:hover:text-neutral-200 ${
+          rightPanel ? "translate-x-[-392px] max-[520px]:translate-x-[-90vw]" : "translate-x-0"
+        }`}
+        aria-label={rightPanel ? "오른쪽 패널 닫기" : "히스토리 패널 열기"}
+        aria-expanded={rightPanel !== null}
+      >
+        {rightPanel ? "›" : "‹"}
+      </button>
+
+      <div
+        className={`absolute inset-y-0 right-0 z-20 w-[380px] max-w-[88%] p-3 transition-transform duration-300 ease-out ${
+          rightPanel ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95">
+          <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                {rightPanel === "place" ? "Naver Place" : "History"}
+              </p>
+              <h2 className="mt-1 text-sm font-bold">
+                {rightPanel === "place" ? "장소 정보" : "최근 검색·클릭"}
+              </h2>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRightPanel(null)}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-xl leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white"
+              aria-label="오른쪽 패널 닫기"
+            >
+              ×
+            </button>
+          </div>
+
+          {rightPanel === "place" && selectedPlace && (
+            <section className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-sm font-bold text-white dark:bg-white dark:text-neutral-900">
+                  {selectedPlace.order}
+                </span>
+
+                <div className="min-w-0">
+                  <p className="text-base font-bold">{selectedPlace.name}</p>
+                  <p className="mt-1 text-xs font-medium text-neutral-400">
+                    {selectedPlace.category}
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+                {selectedPlace.description}
+              </p>
+
+              <div className="mt-4 space-y-3 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+                <div className="flex justify-between gap-3 text-xs">
+                  <span className="text-neutral-400">추천 체류</span>
+                  <span className="font-medium">
+                    {selectedPlace.stayMinutes}분
+                  </span>
+                </div>
+
+                {selectedPlace.naverPlace?.roadAddress && (
+                  <div className="text-xs leading-5">
+                    <span className="text-neutral-400">도로명</span>
+                    <p className="mt-0.5">
+                      {selectedPlace.naverPlace.roadAddress}
+                    </p>
+                  </div>
+                )}
+
+                {selectedPlace.naverPlace?.address && (
+                  <div className="text-xs leading-5">
+                    <span className="text-neutral-400">지번</span>
+                    <p className="mt-0.5">
+                      {selectedPlace.naverPlace.address}
+                    </p>
+                  </div>
+                )}
+
+                {selectedPlace.naverPlace?.telephone && (
+                  <div className="flex justify-between gap-3 text-xs">
+                    <span className="text-neutral-400">전화</span>
+                    <span className="font-medium">
+                      {selectedPlace.naverPlace.telephone}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <a
+                href={
+                  selectedPlace.naverPlace?.link ||
+                  `https://map.naver.com/p/search/${encodeURIComponent(selectedPlace.name)}`
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 block rounded-xl bg-neutral-900 px-3 py-3 text-center text-xs font-semibold text-white hover:opacity-90 dark:bg-white dark:text-neutral-900"
+              >
+                네이버 플레이스에서 보기 ↗
+              </a>
+            </section>
+          )}
+
+          {rightPanel === "history" && (
+            <section className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs text-neutral-400">
+                  검색하거나 지도에서 클릭한 기록은 자동으로 남습니다.
+                </p>
+                {searching && (
+                  <span className="ml-3 shrink-0 text-[10px] text-neutral-400">
+                    검색 중...
+                  </span>
+                )}
+              </div>
+
+              {history.length === 0 ? (
+                <div className="rounded-xl bg-neutral-50 p-4 text-center text-xs leading-5 text-neutral-400 dark:bg-neutral-900">
+                  아직 검색·클릭 기록이 없습니다.
+                </div>
+              ) : (
+                <div className="history-list">
+                  {history.map((item, index) => (
+                    <div
+                      key={item.id}
+                      className="history-item group"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleHistoryClick(item)}
+                        disabled={item.lat === null || item.lng === null}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+                      >
+                        <span className="history-index">
+                          {index + 1}
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
+                            {item.label}
+                          </span>
+                          <span className="mt-1 block text-xs text-neutral-400">
+                            {formatRelativeTime(item.timestamp, now)}
+                            <span className="ml-2 opacity-60">
+                              {item.source === "search" ? "검색" : "지도 클릭"}
+                            </span>
+                          </span>
+                        </span>
+                      </button>
+
+                      <a
+                        href={
+                          item.naverPlaceUrl ||
+                          `https://map.naver.com/p/search/${encodeURIComponent(item.label)}`
+                        }
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="shrink-0 rounded-lg border border-neutral-200 px-2 py-1.5 text-[10px] font-semibold text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 dark:border-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-white"
+                        aria-label={`${item.label} 네이버 플레이스 열기`}
+                      >
+                        네이버
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
 
-      {history.length > 0 && (
-        <aside className="history-panel max-h-[75vh] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-          <h2 className="mb-4 text-sm font-semibold text-neutral-500 dark:text-neutral-400">
-            최근 검색·클릭
-          </h2>
+      {tripPlan && plannedPlaces.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setPlannerPanelOpen((current) => !current)}
+            className={`absolute bottom-1/2 left-2 z-30 flex h-9 w-7 translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-neutral-200/70 bg-white/80 text-sm font-medium text-neutral-400 shadow-sm backdrop-blur transition-all duration-300 hover:bg-white/95 hover:text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-950/80 dark:text-neutral-500 dark:hover:bg-neutral-900/95 ${
+              plannerPanelOpen ? "translate-x-[348px] max-[520px]:translate-x-[78vw]" : "translate-x-0"
+            }`}
+            aria-label={plannerPanelOpen ? "여행 일정 패널 닫기" : "여행 일정 패널 열기"}
+            aria-expanded={plannerPanelOpen}
+          >
+            {plannerPanelOpen ? "‹" : "›"}
+          </button>
 
-          <div className="history-list">
-            {history.map((item, index) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() =>
-                  setTarget({
-                    lat: item.lat,
-                    lng: item.lng,
-                  })
-                }
-                className="history-item group"
-              >
-                <span className="history-index">
-                  {index + 1}
-                </span>
+          <aside
+            className={`absolute inset-y-0 left-0 z-20 w-[380px] max-w-[88%] p-3 transition-transform duration-300 ease-out ${
+              plannerPanelOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white/95 shadow-2xl backdrop-blur dark:border-neutral-700 dark:bg-neutral-950/95">
+              <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                    {plannerMode === "ai" ? "AI Trip" : "Custom Trip"}
+                  </p>
+                  <h2 className="mt-1 text-sm font-bold">여행 일정</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlannerPanelOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-xl leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-800 dark:hover:text-white"
+                  aria-label="여행 일정 패널 닫기"
+                >
+                  ×
+                </button>
+              </div>
 
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
-                    {item.label}
-                  </span>
+              <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-neutral-200 px-3 py-2 dark:border-neutral-800">
+                {tripPlan.days.map((day) => (
+                  <button
+                    key={day.day}
+                    type="button"
+                    onClick={() => onSelectedDayChange?.(day.day)}
+                    className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                      selectedDay === day.day
+                        ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                        : "text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                    }`}
+                  >
+                    DAY {day.day}
+                  </button>
+                ))}
+              </div>
 
-                  <span className="mt-1 block text-xs text-neutral-400">
-                    {formatRelativeTime(
-                      item.timestamp,
-                      now
-                    )}
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className="mb-3">
+                  <p className="text-sm font-bold">
+                    {tripPlan.days.find((day) => day.day === selectedDay)?.title}
+                  </p>
+                  <p className="mt-1 text-[11px] text-neutral-400">
+                    왼쪽 핸들을 잡고 드래그하거나 ↑ ↓ 버튼으로 순서를 변경하세요.
+                  </p>
+                </div>
 
-                    <span className="ml-2 opacity-60">
-                      {item.source === "search"
-                        ? "검색"
-                        : "지도 클릭"}
-                    </span>
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </aside>
+                <TripPlaceSortableList
+                  places={plannedPlaces}
+                  compact
+                  onReorder={(places) => onPlacesChange?.(places)}
+                />
+              </div>
+            </div>
+          </aside>
+        </>
       )}
     </div>
   );
 }
 
-function DomesticMapProvider() {
+function DomesticMapProvider(props: DomesticMapProps) {
   if (!NAVER_MAP_CLIENT_ID) {
     return (
-      <div className="flex h-[60vh] items-center justify-center rounded-xl border border-dashed border-neutral-300 text-sm text-neutral-500 md:h-[75vh]">
-        네이버 지도 API 키가 설정되지 않았습니다.
-        <code className="mx-1">.env.local</code>
-        을 확인해주세요.
+      <div className="flex h-full min-h-[720px] items-center justify-center rounded-2xl border border-dashed border-neutral-300 text-sm text-neutral-500">
+        네이버 지도 API 키가 설정되지 않았습니다. <code className="mx-1">.env.local</code>을 확인해주세요.
       </div>
     );
   }
@@ -377,14 +818,14 @@ function DomesticMapProvider() {
       ncpKeyId={NAVER_MAP_CLIENT_ID}
       submodules={["geocoder"]}
     >
-      <DomesticMapInner />
+      <DomesticMapInner {...props} />
     </NavermapsProvider>
   );
 }
 
 function DomesticMapFallback() {
   return (
-    <div className="flex h-[60vh] flex-col items-center justify-center gap-3 rounded-xl border border-neutral-200 bg-neutral-50 text-center dark:border-neutral-800 dark:bg-neutral-900 md:h-[75vh]">
+    <div className="flex h-full min-h-[720px] flex-col items-center justify-center gap-3 rounded-2xl border border-neutral-200 bg-neutral-50 text-center dark:border-neutral-800 dark:bg-neutral-900">
       <p className="text-sm text-neutral-500">
         네이버 지도를 불러오는 중입니다...
       </p>
@@ -392,10 +833,10 @@ function DomesticMapFallback() {
   );
 }
 
-export default function DomesticMap() {
+export default function DomesticMap(props: DomesticMapProps) {
   return (
     <Suspense fallback={<DomesticMapFallback />}>
-      <DomesticMapProvider />
+      <DomesticMapProvider {...props} />
     </Suspense>
   );
 }
