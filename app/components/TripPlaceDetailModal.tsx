@@ -27,7 +27,15 @@ export default function TripPlaceDetailModal({
 
   if (!place) return null;
 
-  const naverSearchUrl = `https://map.naver.com/p/search/${encodeURIComponent(place.name)}`;
+  const naverSearchQuery = [
+    place.naverPlace?.address,
+    place.name,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const naverSearchUrl = `https://map.naver.com/p/search/${encodeURIComponent(
+    naverSearchQuery || place.name,
+  )}`;
 
   return (
     <div
