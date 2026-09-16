@@ -22,14 +22,14 @@ const emptyPlace = (day: number, order: number): TripPlace => ({
 });
 
 const createEmptyPlan = (): TripPlan => ({
-  destination: "서울",
+  destination: "",
   durationLabel: "당일치기",
   summary: "내가 직접 장소를 추가하고 순서를 정리하는 여행 계획입니다.",
   days: [{ day: 1, title: "내 여행 코스", places: [] }],
 });
 
 export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerProps) {
-  const [destination, setDestination] = useState(plan?.destination ?? "서울");
+  const [destination, setDestination] = useState(plan?.destination ?? "");
   const [activeDay, setActiveDay] = useState(1);
   const [newPlaceName, setNewPlaceName] = useState("");
 
@@ -43,7 +43,7 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
   const ensurePlan = () => {
     if (plan) return plan;
     const next = createEmptyPlan();
-    next.destination = destination.trim() || "서울";
+    next.destination = destination.trim();
     return next;
   };
 
