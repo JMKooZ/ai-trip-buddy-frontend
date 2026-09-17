@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 
 interface RegionSearchBarProps {
   placeholder: string;
@@ -14,10 +15,14 @@ export default function RegionSearchBar({
   loading,
 }: RegionSearchBarProps) {
   const [query, setQuery] = useState("");
+  const { alert, success } = useAppDialog();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if(!query.trim()) {
+      void alert("장소를 입력해주세요.");
+      return;
+    }
     onSearch(query.trim());
   };
 
