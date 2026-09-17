@@ -6,11 +6,13 @@ import type { LatLng } from "./types";
 
 export function DomesticSearchMarker({ target }: { target: LatLng | null }) {
   const navermaps = useNavermaps();
-  if (!target) return null;
+  if (!target || !navermaps) return null;
+
+  const position = new navermaps.LatLng(target.lat, target.lng);
 
   return (
     <Marker
-      position={target}
+      position={position}
       icon={{
         content: `<div style="width:16px;height:16px;border-radius:50%;background:#111;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.28)"></div>`,
         size: new navermaps.Size(16, 16),
@@ -42,7 +44,11 @@ export function DomesticPlannedPlaceMarkers({
         return (
           <Marker
             key={place.id}
-            position={{ lat: place.lat, lng: place.lng }}
+            position={
+              navermaps
+                ? new navermaps.LatLng(place.lat, place.lng)
+                : { lat: place.lat, lng: place.lng }
+            }
             icon={{
               content: `
                 <div style="width:${size}px;height:${size}px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:${selected ? "#111111" : "#ffffff"};color:${selected ? "#ffffff" : "#111111"};border:3px solid #111111;box-shadow:0 3px 10px rgba(0,0,0,0.25);font-size:${selected ? 15 : 13}px;font-weight:800;cursor:pointer;transition:all 180ms ease;">${place.order}</div>

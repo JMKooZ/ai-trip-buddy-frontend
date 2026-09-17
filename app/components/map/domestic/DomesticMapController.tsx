@@ -28,9 +28,15 @@ export default function DomesticMapController({
   useEffect(() => {
     if (!map || !navermaps || !target) return;
 
-    map.setCenter(new navermaps.LatLng(target.lat, target.lng));
-    map.setZoom(zoom);
-  }, [map, navermaps, target, zoom]);
+        const lat = Number(target.lat);
+        const lng = Number(target.lng);
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+        const position = new navermaps.LatLng(lat, lng);
+
+        map.morph(position, zoom);
+    }, [map, navermaps, target, zoom]);
 
   return null;
 }

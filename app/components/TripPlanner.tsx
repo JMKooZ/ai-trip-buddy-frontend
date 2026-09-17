@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createTripPlan } from "@/app/lib/api/tripApi";
+import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 import type { TripDuration, TripPlan, TravelStyle } from "@/app/types/trip";
 import RegionSearchBar from "@/app/components/map/RegionSearchBar";
 
@@ -30,6 +32,7 @@ export default function TripPlanner({
   const [styles, setStyles] = useState<TravelStyle[]>([]);
   const [request, setRequest] = useState("");
   const [generating, setGenerating] = useState(false);
+  const { alert, success } = useAppDialog();
 
   const durationText = useMemo(() => {
     return duration === "day" ? "당일치기" : `${nights}박 ${nights + 1}일`;
@@ -47,37 +50,26 @@ export default function TripPlanner({
     const normalizedDestination = destination.trim();
 
     if (!normalizedDestination) {
-      window.alert("여행지를 입력해 주세요.");
+      void alert("여행지를 입력해 주세요.");
       return;
     }
 
     setGenerating(true);
 
     try {
-      const response = await fetch("/api/trips", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          destination: normalizedDestination,
-          duration,
-          nights: duration === "stay" ? nights : null,
-          travelStyles: styles,
-          request: request.trim(),
-        }),
+      const plan = await createTripPlan({
+        destination: normalizedDestination,
+        duration,
+        nights: duration === "stay" ? nights : null,
+        travelStyles: styles,
+        request: request.trim(),
       });
 
-      if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || "여행 일정 생성에 실패했습니다.");
-      }
-
-      const plan = (await response.json()) as TripPlan;
       onPlanGenerated(plan);
+      await success("여행 일정이 완성되었습니다!", "여행 일정 완성");
     } catch (error) {
       console.error("여행 일정 생성 실패", error);
-      window.alert("여행 일정을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      void alert("여행 일정을 생성하지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setGenerating(false);
     }
