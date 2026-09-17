@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 import RegionTabs from "@/app/components/map/RegionTabs";
 import ThemeToggle from "@/app/components/ThemeToggle";
 import TripPlanner from "@/app/components/TripPlanner";
@@ -44,6 +45,8 @@ export default function Home() {
   const [plannerMode, setPlannerMode] = useState<"ai" | "custom">("ai");
   const [selectedDay, setSelectedDay] = useState(1);
   const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
+  const { confirm } = useAppDialog();
+
   const [mapSearchRequest, setMapSearchRequest] = useState({
     query: "",
     id: 0,
@@ -156,8 +159,9 @@ export default function Home() {
     });
   };
 
-  const resetTripPlan = () => {
-    if (!window.confirm("현재 여행 계획을 모두 초기화할까요?")) return;
+  const resetTripPlan = async () => {
+    const confirmed = await confirm("현재 여행 계획을 모두 초기화할까요?", "여행 계획 초기화");
+    if (!confirmed) return;
     setTripPlan(null);
     setPlannerMode("ai");
     setSelectedDay(1);
