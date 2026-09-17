@@ -44,10 +44,12 @@ export default function DomesticTripPlannerPanel({
       <button
         type="button"
         onClick={() => onToggle(!open)}
-        className={`absolute bottom-1/2 left-2 z-30 flex h-9 w-7 translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-neutral-200/70 bg-white/80 text-sm font-medium text-neutral-400 shadow-sm backdrop-blur transition-all duration-300 hover:bg-white/95 hover:text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-950/80 dark:text-neutral-500 dark:hover:bg-neutral-900/95 ${open ? "translate-x-[348px] max-[520px]:translate-x-[78vw]" : "translate-x-0"}`}
+        className={`absolute bottom-1/2 left-1 z-30 flex h-12 w-6 translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-neutral-200 bg-white text-neutral-400 shadow-sm transition-all duration-300 hover:text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-500 dark:hover:text-neutral-200 ${open ? "translate-x-[360px] max-[520px]:translate-x-[calc(88vw-20px)]" : "translate-x-0"}`}
         aria-label={open ? "여행 일정 패널 닫기" : "여행 일정 패널 열기"}
       >
-        {open ? "‹" : "›"}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform duration-300 ${open ? "" : "rotate-180"}`}>
+          <path d="M7 1L2.5 5L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
       <aside className={`absolute inset-y-0 left-0 z-20 w-[380px] max-w-[88%] p-3 transition-transform duration-300 ease-out ${open ? "translate-x-0" : "-translate-x-full"}`}>

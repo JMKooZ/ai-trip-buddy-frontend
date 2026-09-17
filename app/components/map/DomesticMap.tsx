@@ -243,8 +243,15 @@ function DomesticMapInner({
 
       {showHistory && (
         <>
-          <button type="button" onClick={() => setRightPanel((current) => (current ? null : "history"))} className={`absolute right-2 top-1/2 z-30 flex h-9 w-7 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-neutral-200/70 bg-white/70 text-sm font-medium text-neutral-400 shadow-sm backdrop-blur transition-all duration-300 hover:bg-white/90 hover:text-neutral-700 dark:border-neutral-700/70 dark:bg-neutral-950/70 dark:text-neutral-500 dark:hover:bg-neutral-900/90 dark:hover:text-neutral-200 ${rightPanel ? "translate-x-[-392px] max-[520px]:translate-x-[-90vw]" : "translate-x-0"}`} aria-label={rightPanel ? "오른쪽 패널 닫기" : "히스토리 패널 열기"}>
-            {rightPanel ? "›" : "‹"}
+          <button
+            type="button"
+            onClick={() => setRightPanel((current) => (current ? null : "history"))}
+            className={`absolute right-1 top-1/2 z-30 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-l-md border border-r-0 border-neutral-200 bg-white text-neutral-400 shadow-sm transition-all duration-300 hover:text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-500 dark:hover:text-neutral-200 ${rightPanel ? "translate-x-[-360px] max-[520px]:translate-x-[calc(-88vw+20px)]" : "translate-x-0"}`}
+            aria-label={rightPanel ? "오른쪽 패널 닫기" : "히스토리 패널 열기"}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform duration-300 ${rightPanel ? "rotate-180" : ""}`}>
+              <path d="M7 1L2.5 5L7 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
 
           <div className={`absolute inset-y-0 right-0 z-20 w-[380px] max-w-[88%] p-3 transition-transform duration-300 ease-out ${rightPanel ? "translate-x-0" : "translate-x-full"}`}>
@@ -329,7 +336,7 @@ function DomesticMapInner({
         </>
       )}
 
-      {tripPlan && plannedPlaces.length > 0 && (
+      {tripPlan && (
         <DomesticTripPlannerPanel tripPlan={tripPlan} plannerMode={plannerMode} selectedDay={selectedDay} open={plannerPanelOpen} onToggle={setPlannerPanelOpen} onSelectedDayChange={onSelectedDayChange} onPlaceUpdate={onPlaceUpdate} onPlaceMove={onPlaceMove} onPlaceRemove={onPlaceRemove} onPlaceAdd={handleAddPlace} onPlacesChange={onPlacesChange} />
       )}
 

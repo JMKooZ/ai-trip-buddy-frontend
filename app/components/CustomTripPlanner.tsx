@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import type { TripDay, TripPlace, TripPlan } from "@/app/types/trip";
 import TripPlaceSortableList from "@/app/components/TripPlaceSortableList";
+import { searchPlaces } from "@/app/lib/api/tripApi";
+import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 
 interface CustomTripPlannerProps {
   plan: TripPlan | null;
@@ -32,8 +34,8 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
   const [destination, setDestination] = useState(plan?.destination ?? "");
   const [activeDay, setActiveDay] = useState(1);
   const [newPlaceName, setNewPlaceName] = useState("");
-
-
+  const [adding, setAdding] = useState(false);
+  const {alert, success} = useAppDialog();
 
   const currentPlan = plan ?? createEmptyPlan();
   const currentDay = currentPlan.days.find((day) => day.day === activeDay) ?? currentPlan.days[0];
@@ -55,23 +57,61 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
     });
   };
 
-  const addPlace = () => {
+  const addPlace = async () => {
     const name = newPlaceName.trim();
-    if (!name) return;
+    if (!name){
+      void alert("장소를 입력해주세요.")
+      return;
+    }
 
-    const base = ensurePlan();
-    const day = base.days.find((item) => item.day === activeDay) ?? base.days[0];
-    const place = emptyPlace(day.day, day.places.length + 1);
+    setAdding(true);
 
-    syncPlan({
-      ...base,
-      days: base.days.map((current) =>
-        current.day === day.day
-          ? { ...current, places: [...current.places, { ...place, name }] }
-          : current,
-      ),
-    });
-    setNewPlaceName("");
+    try {
+      const base = ensurePlan();
+      const day = base.days.find((item) => item.day === activeDay) ?? base.days[0];
+
+      const query = [base.destination, name].filter(Boolean).join(" ");
+      let lat = emptyPlace(day.day, 0).lat;
+      let lng = emptyPlace(day.day, 0).lng;
+      let address = "";
+      let roadAddress = "";
+
+      try {
+        const result = await searchPlaces(query);
+        const first = result.items.find(
+          (item) => item.lat != null && item.lng != null,
+        );
+
+        if (first) {
+          lat = first.lat as number;
+          lng = first.lng as number;
+          address = first.address || "";
+          roadAddress = first.roadAddress || "";
+        }
+      } catch (error) {
+        console.error("장소 검색 실패, 기본 좌표로 추가합니다.", error);
+      }
+
+      const place: TripPlace = {
+        ...emptyPlace(day.day, day.places.length + 1),
+        name,
+        lat,
+        lng,
+        naverPlace: address || roadAddress ? { address, roadAddress } : undefined,
+      };
+
+      syncPlan({
+        ...base,
+        days: base.days.map((current) =>
+          current.day === day.day
+            ? { ...current, places: [...current.places, place] }
+            : current,
+        ),
+      });
+      setNewPlaceName("");
+    } finally {
+      setAdding(false);
+    }
   };
 
   const removePlace = (placeId: string) => {
@@ -95,8 +135,6 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
       };
     });
   };
-
-
 
   const updatePlace = (placeId: string, field: "name" | "category" | "description", value: string) => {
     updateDay(activeDay, (day) => ({
@@ -180,14 +218,16 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
           onChange={(event) => setNewPlaceName(event.target.value)}
           onKeyDown={(event) => event.key === "Enter" && addPlace()}
           placeholder="장소를 직접 추가해보세요"
+          disabled={adding}
           className="min-w-0 flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm outline-none dark:border-neutral-700 dark:bg-neutral-950"
         />
         <button
           type="button"
           onClick={addPlace}
-          className="rounded-xl bg-neutral-900 px-4 text-xs font-semibold text-white dark:bg-white dark:text-neutral-900"
+          disabled={adding}
+          className="rounded-xl bg-neutral-900 px-4 text-xs font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
         >
-          추가
+          {adding ? "검색 중..." : "추가"}
         </button>
       </div>
 
