@@ -41,6 +41,10 @@ export async function searchPlaces(
     "/trips/search/places",
     { params: { query } },
   );
+  return response.data;
+}
 
+export async function saveTripPlan(plan: TripPlan): Promise<{ id: number }> {
+  const response = await apiClient.post<{ id: number }>("/trips/saved", plan);
   return response.data;
 }
