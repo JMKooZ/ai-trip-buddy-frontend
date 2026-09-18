@@ -22,7 +22,12 @@ interface DialogState {
 
 interface AppDialogContextValue {
   alert: (message: string, title?: string) => Promise<void>;
-  confirm: (message: string, title?: string) => Promise<boolean>;
+  confirm: (
+    message: string,
+    title?: string,
+    confirmLabel?: string,
+    cancelLabel?: string,
+  ) => Promise<boolean>;
   success: (message: string, title?: string) => Promise<void>;
 }
 
@@ -50,18 +55,14 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const confirm = useCallback((message: string, title = "확인") => {
-    return new Promise<boolean>((resolve) => {
-      setDialog({
-        variant: "confirm",
-        title,
-        message,
-        confirmLabel: "확인",
-        cancelLabel: "취소",
-        resolve,
+  const confirm = useCallback(
+    (message: string, title = "확인", confirmLabel = "확인", cancelLabel = "취소") => {
+      return new Promise<boolean>((resolve) => {
+        setDialog({ variant: "confirm", title, message, confirmLabel, cancelLabel, resolve });
       });
-    });
-  }, []);
+    },
+    [],
+  );
 
   const success = useCallback((message: string, title = "완료") => {
     return new Promise<void>((resolve) => {

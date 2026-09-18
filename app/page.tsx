@@ -1,15 +1,20 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 import RegionTabs from "@/app/components/map/RegionTabs";
 import ThemeToggle from "@/app/components/ThemeToggle";
 import TripPlanner from "@/app/components/TripPlanner";
 import CustomTripPlanner from "@/app/components/CustomTripPlanner";
 import TripPlaceDetailModal from "@/app/components/TripPlaceDetailModal";
+import SaveTripButton from "@/app/components/trip/SaveTripButton";
+import ShareTripButton from "@/app/components/trip/ShareTripButton";
+import AuthWidget from "@/app/components/auth/AuthWidget";
 import type { RegionMode } from "@/app/types/map";
 import type { TripPlace, TripPlan } from "@/app/types/trip";
+
+const DRAFT_TRIP_PLAN_KEY = "draft-trip-plan";
 
 const DomesticMap = dynamic(() => import("@/app/components/map/DomesticMap"), {
   ssr: false,
@@ -41,7 +46,18 @@ function getNaverSearchUrl(place: TripPlace) {
 
 export default function Home() {
   const [mode, setMode] = useState<RegionMode>("domestic");
-  const [tripPlan, setTripPlan] = useState<TripPlan | null>(null);
+
+  const [tripPlan, setTripPlan] = useState<TripPlan | null>(() => {
+    if (typeof window === "undefined") return null;
+    const saved = window.sessionStorage.getItem(DRAFT_TRIP_PLAN_KEY);
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved) as TripPlan;
+    } catch {
+      return null;
+    }
+  });
+
   const [plannerMode, setPlannerMode] = useState<"ai" | "custom">("ai");
   const [selectedDay, setSelectedDay] = useState(1);
   const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
@@ -51,6 +67,16 @@ export default function Home() {
     query: "",
     id: 0,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (tripPlan) {
+      window.sessionStorage.setItem(DRAFT_TRIP_PLAN_KEY, JSON.stringify(tripPlan));
+    } else {
+      window.sessionStorage.removeItem(DRAFT_TRIP_PLAN_KEY);
+    }
+  }, [tripPlan]);
 
   const selectedDayPlan = tripPlan?.days.find(
     (day) => day.day === selectedDay,
@@ -167,6 +193,7 @@ export default function Home() {
     setSelectedDay(1);
     setSelectedPlace(null);
     setMapSearchRequest({ query: "", id: 0 });
+    window.sessionStorage.removeItem(DRAFT_TRIP_PLAN_KEY);
   };
 
   return (
@@ -180,38 +207,50 @@ export default function Home() {
             여행을 계획하는 시간을 줄여주는 AI 여행 플래너
           </p>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          <AuthWidget />
+          <ThemeToggle />
+        </div>
       </header>
 
-      <RegionTabs value={mode} onChange={setMode} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <RegionTabs value={mode} onChange={setMode} />
+
+        {tripPlan && (
+          <div className="flex flex-wrap items-center gap-2">
+            <SaveTripButton plan={tripPlan} />
+            <ShareTripButton plan={tripPlan} />
+          </div>
+        )}
+      </div>
 
       <section className="grid min-h-[720px] gap-5 lg:grid-cols-[380px_minmax(0,1fr)]">
         <div className="min-h-0">
           <div className="flex h-full min-h-0 flex-col gap-3">
             <div className="flex items-center gap-2">
               <div className="grid flex-1 grid-cols-2 rounded-xl bg-neutral-100 p-1 dark:bg-neutral-800">
-              <button
-                type="button"
-                onClick={() => setPlannerMode("ai")}
-                className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
-                  plannerMode === "ai"
-                    ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-950 dark:text-white"
-                    : "text-neutral-500"
-                }`}
-              >
-                AI 추천 일정
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlannerMode("custom")}
-                className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
-                  plannerMode === "custom"
-                    ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-950 dark:text-white"
-                    : "text-neutral-500"
-                }`}
-              >
-                내 여행 계획
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setPlannerMode("ai")}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                    plannerMode === "ai"
+                      ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-950 dark:text-white"
+                      : "text-neutral-500"
+                  }`}
+                >
+                  AI 추천 일정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlannerMode("custom")}
+                  className={`rounded-lg px-3 py-2.5 text-sm font-semibold ${
+                    plannerMode === "custom"
+                      ? "bg-white text-neutral-900 shadow-sm dark:bg-neutral-950 dark:text-white"
+                      : "text-neutral-500"
+                  }`}
+                >
+                  내 여행 계획
+                </button>
               </div>
               <button
                 type="button"

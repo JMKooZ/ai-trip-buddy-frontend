@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { AppDialogProvider } from "@/app/components/ui/AppDialogProvider";
+import { AuthProvider } from "@/app/components/auth/AuthProvider";
 
 export const metadata: Metadata = {
   title: "AI-Trip Buddy",
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AppDialogProvider>{children}</AppDialogProvider>
+          <AuthProvider>
+            <AppDialogProvider>{children}</AppDialogProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
