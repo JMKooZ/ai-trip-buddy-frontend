@@ -1,3 +1,4 @@
+import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
 "use client";
 
 import { useCallback, useState } from "react";
@@ -9,6 +10,7 @@ import type { MapView } from "@/app/types/map";
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 export default function OverseasMap() {
+  const { alert } = useAppDialog();
   if (!GOOGLE_MAPS_API_KEY) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center rounded-xl border border-dashed border-neutral-300 text-sm text-neutral-500 md:h-[75vh]">
@@ -40,7 +42,7 @@ function OverseasMapInner({ apiKey }: { apiKey: string }) {
       setSearching(false);
 
       if (status !== "OK" || !results?.[0]) {
-        window.alert("검색 결과가 없어요. 다른 도시명이나 장소명으로 시도해보세요.");
+        void alert("검색 결과가 없어요. 다른 도시명이나 장소명으로 시도해보세요.");
         return;
       }
 
