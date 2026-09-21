@@ -9,6 +9,7 @@ import type { TripPlan } from "@/app/types/trip";
 
 const DRAFT_TRIP_PLAN_KEY = "draft-trip-plan";
 const DRAFT_TRIP_ID_KEY = "draft-trip-id";
+const LOGIN_INTENT_KEY = "login-redirect-intent";
 
 interface SaveTripButtonProps {
   plan: TripPlan | null;
@@ -24,6 +25,11 @@ export default function SaveTripButton({ plan, savedTripId, onSaved }: SaveTripB
 
   useEffect(() => {
     if (!user) return;
+
+    const loginIntent = window.sessionStorage.getItem(LOGIN_INTENT_KEY);
+    if (!loginIntent) return;
+
+    window.sessionStorage.removeItem(LOGIN_INTENT_KEY);
 
     const pending = window.sessionStorage.getItem(DRAFT_TRIP_PLAN_KEY);
     if (!pending) return;
@@ -62,7 +68,10 @@ export default function SaveTripButton({ plan, savedTripId, onSaved }: SaveTripB
         "로그인",
         "취소",
       );
-      if (goLogin) setLoginOpen(true);
+      if (goLogin) {
+        window.sessionStorage.setItem(LOGIN_INTENT_KEY, "1");
+        setLoginOpen(true);
+      }
       return;
     }
 

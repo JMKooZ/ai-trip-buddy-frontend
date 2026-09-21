@@ -18,6 +18,8 @@ import { DomesticPlannedRoute, DomesticRouteViewport } from "./domestic/Domestic
 import DomesticTripPlannerPanel from "./domestic/DomesticTripPlannerPanel";
 import type { DomesticMapProps, HistoryEntry, LatLng } from "./domestic/types";
 import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
+import { searchPlaces } from "@/app/lib/api/tripApi";
+import { inferPlaceCategory } from "@/app/lib/map/categoryLabel";
 
 const NAVER_MAP_CLIENT_ID = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
 const SEARCH_ZOOM = 16;
@@ -178,9 +180,9 @@ function DomesticMapInner({
     });
   }, [addHistory, searchQuery]);
 
-  const handleAddPlace = useCallback((name: string) => {
+  const handleAddPlace = useCallback(async (name: string) => {
     const normalizedName = name.trim();
-    if (!normalizedName || !navermaps?.Service) return;
+    if (!normalizedName) return;
 
     const destination = tripPlan?.destination?.trim() || "";
     const query = [destination, normalizedName].filter(Boolean).join(" ");
@@ -189,18 +191,20 @@ function DomesticMapInner({
     if (!targetDay) return;
 
     setSearching(true);
-    navermaps.Service.geocode({ query }, (status: string, response: any) => {
-      setSearching(false);
-      if (status !== navermaps.Service.Status.OK) {
-        void alert(`장소를 찾을 수 없습니다.\n검색어: ${query}`);
-        return;
+    try {
+      // ⭐ 1차: 입력한 이름 그대로 검색 (이미 완성된 주소·고유명사인 경우 이게 맞음)
+      let result = await searchPlaces(normalizedName);
+      let first = result.items.find((item) => item.lat != null && item.lng != null);
+
+      // ⭐ 2차: 못 찾았고 destination이 있으면, destination을 붙여서 재시도 (짧은 상호명인 경우)
+      if (!first && destination) {
+        const fallbackQuery = [destination, normalizedName].filter(Boolean).join(" ");
+        result = await searchPlaces(fallbackQuery);
+        first = result.items.find((item) => item.lat != null && item.lng != null);
       }
 
-      const result = response?.v2?.addresses?.[0];
-      const lat = Number(result?.y);
-      const lng = Number(result?.x);
-      if (!result || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-        void alert("장소의 좌표를 확인하지 못했습니다.");
+      if (!first || first.lat == null || first.lng == null) {
+        void alert(`"${normalizedName}"의 위치를 찾을 수 없습니다.\n다른 이름으로 다시 시도해주세요.`);
         return;
       }
 
@@ -209,19 +213,24 @@ function DomesticMapInner({
         day: selectedDay,
         order: targetDay.places.length + 1,
         name: normalizedName,
-        category: "관광",
-        description: "",
-        lat,
-        lng,
+        category: inferPlaceCategory(first.category),
+        description: first.description || "",
+        lat: first.lat,
+        lng: first.lng,
         stayMinutes: 60,
-        naverPlace: { address: result.jibunAddress || "", roadAddress: result.roadAddress || "" },
+        naverPlace: { address: first.address || "", roadAddress: first.roadAddress || "" },
       };
 
       setSearchTarget(null);
-      setTarget({ lat, lng });
+      setTarget({ lat: first.lat, lng: first.lng });
       onPlaceAdd?.(place);
-    });
-  }, [navermaps, onPlaceAdd, selectedDay, tripPlan]);
+    } catch (error) {
+      console.error("장소 검색 실패", error);
+      void alert("장소 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setSearching(false);
+    }
+  }, [onPlaceAdd, selectedDay, tripPlan, alert]);
 
   return (
     <div className="relative h-full min-h-[720px] w-full">

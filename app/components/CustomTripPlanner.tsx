@@ -5,6 +5,7 @@ import type { TripDay, TripPlace, TripPlan } from "@/app/types/trip";
 import TripPlaceSortableList from "@/app/components/TripPlaceSortableList";
 import { searchPlaces } from "@/app/lib/api/tripApi";
 import { useAppDialog } from "@/app/components/ui/AppDialogProvider";
+import { inferPlaceCategory } from "@/app/lib/map/categoryLabel";
 
 interface CustomTripPlannerProps {
   plan: TripPlan | null;
@@ -59,8 +60,8 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
 
   const addPlace = async () => {
     const name = newPlaceName.trim();
-    if (!name){
-      void alert("장소를 입력해주세요.")
+    if (!name) {
+      void alert("장소를 입력해주세요.");
       return;
     }
 
@@ -69,35 +70,28 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
     try {
       const base = ensurePlan();
       const day = base.days.find((item) => item.day === activeDay) ?? base.days[0];
-
       const query = [base.destination, name].filter(Boolean).join(" ");
-      let lat = emptyPlace(day.day, 0).lat;
-      let lng = emptyPlace(day.day, 0).lng;
-      let address = "";
-      let roadAddress = "";
 
-      try {
-        const result = await searchPlaces(query);
-        const first = result.items.find(
-          (item) => item.lat != null && item.lng != null,
-        );
+      const result = await searchPlaces(query);
+      const first = result.items.find(
+        (item) => item.lat != null && item.lng != null,
+      );
 
-        if (first) {
-          lat = first.lat as number;
-          lng = first.lng as number;
-          address = first.address || "";
-          roadAddress = first.roadAddress || "";
-        }
-      } catch (error) {
-        console.error("장소 검색 실패, 기본 좌표로 추가합니다.", error);
+      if (!first) {
+        void alert(`"${name}"의 위치를 찾을 수 없습니다.\n다른 이름으로 다시 시도해주세요.`);
+        return;
       }
 
       const place: TripPlace = {
         ...emptyPlace(day.day, day.places.length + 1),
         name,
-        lat,
-        lng,
-        naverPlace: address || roadAddress ? { address, roadAddress } : undefined,
+        lat: first.lat as number,
+        lng: first.lng as number,
+        category: inferPlaceCategory(first.category),
+        description: first.description || "",
+        naverPlace: first.address || first.roadAddress
+          ? { address: first.address || "", roadAddress: first.roadAddress || "" }
+          : undefined,
       };
 
       syncPlan({
@@ -109,6 +103,9 @@ export default function CustomTripPlanner({ plan, onChange }: CustomTripPlannerP
         ),
       });
       setNewPlaceName("");
+    } catch (error) {
+      console.error("장소 검색 실패", error);
+      void alert("장소 검색 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
     } finally {
       setAdding(false);
     }
