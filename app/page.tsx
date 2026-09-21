@@ -15,6 +15,7 @@ import type { RegionMode } from "@/app/types/map";
 import type { TripPlace, TripPlan } from "@/app/types/trip";
 
 const DRAFT_TRIP_PLAN_KEY = "draft-trip-plan";
+const DRAFT_TRIP_ID_KEY = "draft-trip-id";
 
 const DomesticMap = dynamic(() => import("@/app/components/map/DomesticMap"), {
   ssr: false,
@@ -58,6 +59,12 @@ export default function Home() {
     }
   });
 
+  const [savedTripId, setSavedTripId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const saved = window.sessionStorage.getItem(DRAFT_TRIP_ID_KEY);
+    return saved ? Number(saved) : null;
+  });
+
   const [plannerMode, setPlannerMode] = useState<"ai" | "custom">("ai");
   const [selectedDay, setSelectedDay] = useState(1);
   const [selectedPlace, setSelectedPlace] = useState<TripPlace | null>(null);
@@ -78,12 +85,23 @@ export default function Home() {
     }
   }, [tripPlan]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (savedTripId != null) {
+      window.sessionStorage.setItem(DRAFT_TRIP_ID_KEY, String(savedTripId));
+    } else {
+      window.sessionStorage.removeItem(DRAFT_TRIP_ID_KEY);
+    }
+  }, [savedTripId]);
+
   const selectedDayPlan = tripPlan?.days.find(
     (day) => day.day === selectedDay,
   );
 
   const handlePlanGenerated = (plan: TripPlan) => {
     setTripPlan(plan);
+    setSavedTripId(null); // ⭐ 새로 생성한 일정이니 수정 모드 아님
     setSelectedDay(plan.days[0]?.day ?? 1);
   };
 
@@ -189,11 +207,13 @@ export default function Home() {
     const confirmed = await confirm("현재 여행 계획을 모두 초기화할까요?", "여행 계획 초기화");
     if (!confirmed) return;
     setTripPlan(null);
+    setSavedTripId(null);
     setPlannerMode("ai");
     setSelectedDay(1);
     setSelectedPlace(null);
     setMapSearchRequest({ query: "", id: 0 });
     window.sessionStorage.removeItem(DRAFT_TRIP_PLAN_KEY);
+    window.sessionStorage.removeItem(DRAFT_TRIP_ID_KEY);
   };
 
   return (
@@ -218,7 +238,11 @@ export default function Home() {
 
         {tripPlan && (
           <div className="flex flex-wrap items-center gap-2">
-            <SaveTripButton plan={tripPlan} />
+            <SaveTripButton
+              plan={tripPlan}
+              savedTripId={savedTripId}
+              onSaved={setSavedTripId}
+            />
             <ShareTripButton plan={tripPlan} />
           </div>
         )}

@@ -59,17 +59,19 @@ export default function MyPage() {
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
           {trips.map((trip) => (
-            <li
-              key={trip.id}
-              className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-900"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">
-                {trip.durationLabel}
-              </p>
-              <h2 className="mt-1 text-lg font-bold">{trip.destination}</h2>
-              <p className="mt-2 text-xs text-neutral-400">
-                {new Date(trip.createdAt).toLocaleDateString("ko-KR")} 저장됨
-              </p>
+            <li key={trip.id}>
+              <Link
+                href={`/mypage/${trip.id}`}
+                className="block rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm transition-colors hover:border-neutral-400 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-600"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                  {trip.durationLabel}
+                </p>
+                <h2 className="mt-1 text-lg font-bold">{trip.destination}</h2>
+                <p className="mt-2 text-xs text-neutral-400">
+                  {new Date(trip.createdAt).toLocaleDateString("ko-KR")} 저장됨
+                </p>
+              </Link>
             </li>
           ))}
         </ul>
